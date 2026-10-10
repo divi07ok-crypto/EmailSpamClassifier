@@ -1,0 +1,221 @@
+﻿```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Spam Classifier</title>
+
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #101827, #172554, #312e81);
+            color: #f8fafc;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 24px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 720px;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.16);
+            border-radius: 24px;
+            padding: 36px;
+            box-shadow: 0 24px 70px rgba(0,0,0,0.3);
+        }
+
+        .icon { font-size: 42px; text-align: center; }
+        h1 { text-align: center; margin-bottom: 10px; }
+
+        .subtitle {
+            text-align: center;
+            color: #cbd5e1;
+            line-height: 1.6;
+            margin-bottom: 30px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 170px;
+            padding: 16px;
+            border: 1px solid #475569;
+            border-radius: 12px;
+            background: #0f172a;
+            color: white;
+            font: inherit;
+            resize: vertical;
+            outline: none;
+        }
+
+        textarea:focus { border-color: #818cf8; }
+
+        button {
+            width: 100%;
+            margin-top: 16px;
+            padding: 15px;
+            border: none;
+            border-radius: 12px;
+            background: #818cf8;
+            color: #111827;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        button:hover { background: #a5b4fc; }
+        button:disabled { opacity: 0.6; cursor: wait; }
+
+        #result {
+            display: none;
+            margin-top: 22px;
+            padding: 18px;
+            border-radius: 12px;
+            background: #1e293b;
+            line-height: 1.6;
+            overflow-wrap: anywhere;
+        }
+
+        #result h2 { margin: 0 0 8px; }
+        .spam { color: #fca5a5; }
+        .ham { color: #86efac; }
+
+        .note {
+            text-align: center;
+            color: #cbd5e1;
+            font-size: 12px;
+            margin-top: 24px;
+        }
+
+        @media (max-width: 500px) {
+            .container { padding: 24px 18px; }
+            h1 { font-size: 25px; }
+        }
+    </style>
+</head>
+
+<body>
+    <main class="container">
+        <div class="icon">🛡️</div>
+
+        <h1>Email Spam Classifier</h1>
+
+        <p class="subtitle">
+            Machine learning-based message classification.
+            Enter a message to identify whether it is Spam or Ham.
+        </p>
+
+        <form id="spamForm">
+            <label for="message">Enter your message</label>
+
+            <textarea
+                id="message"
+                placeholder="Example: Congratulations! You have won a free prize..."
+                required
+            ></textarea>
+
+            <button id="checkButton" type="submit">Check Message</button>
+        </form>
+
+        <section id="result" aria-live="polite"></section>
+
+        <p class="note">
+            Powered by Machine Learning · TF-IDF + Trained Classifier
+        </p>
+    </main>
+
+    <script>
+        const form = document.getElementById("spamForm");
+        const messageInput = document.getElementById("message");
+        const button = document.getElementById("checkButton");
+        const resultBox = document.getElementById("result");
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+
+            const message = messageInput.value.trim();
+            if (!message) return;
+
+            button.disabled = true;
+            button.textContent = "Analyzing...";
+            resultBox.style.display = "block";
+            resultBox.textContent = "Checking your message...";
+
+            try {
+                const response = await fetch("/predict", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ message })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || "Could not check the message.");
+                }
+
+                const prediction = String(data.prediction || "")
+                    .trim()
+                    .toLowerCase();
+
+                if (prediction !== "spam" && prediction !== "ham") {
+                    throw new Error(
+                        "Unexpected prediction returned by server: " +
+                        String(data.prediction)
+                    );
+                }
+
+                const isSpam = prediction === "spam";
+
+                const heading = document.createElement("h2");
+                heading.className = isSpam ? "spam" : "ham";
+                heading.textContent = isSpam
+                    ? "⚠️ Spam Detected"
+                    : "✅ Ham";
+
+                const description = document.createElement("p");
+                description.textContent = isSpam
+                    ? "The model classifies this message as spam."
+                    : "The model classifies this message as ham (a legitimate, non-spam message).";
+
+                const probability = document.createElement("p");
+                const spamProbability = Number(data.spam_probability);
+
+                if (!Number.isFinite(spamProbability)) {
+                    throw new Error("Invalid spam probability returned by server.");
+                }
+
+                probability.textContent =
+                    "Estimated spam probability: " +
+                    spamProbability.toFixed(2) + "%";
+
+                resultBox.replaceChildren(
+                    heading,
+                    description,
+                    probability
+                );
+
+            } catch (error) {
+                resultBox.textContent =
+                    "Error: " + error.message +
+                    " Please check that the Flask server is running.";
+            } finally {
+                button.disabled = false;
+                button.textContent = "Check Message";
+            }
+        });
+    </script>
+</body>
+</html>
